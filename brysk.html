@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>BRYSK - Economic Strategy</title>
+    <!-- SPRAXXX_GAME_V1 | brysk | 2026-01-05T00:00:00Z -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            touch-action: none;
+        }
+        #gameCanvas {
+            display: block;
+            background: #0f1419;
+            cursor: pointer;
+        }
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .top-bar {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #3498db;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .player-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .resource {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .resource-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .current-player {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 5px 15px;
+            border-radius: 5px;
+            background: rgba(52, 152, 219, 0.3);
+        }
+        .phase-indicator {
+            font-size: 14px;
+            color: #3498db;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #setupScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .setup-panel {
+            background: #1a1a2e;
+            padding: 40px;
+            border-radius: 15px;
+            border: 3px solid #3498db;
+            max-width: 500px;
+            width: 90%;
+        }
+        .setup-panel h1 {
+            color: #3498db;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 36px;
+        }
+        .setup-panel h2 {
+            color: #ecf0f1;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+        .player-select {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .player-count-btn {
+            flex: 1;
+            min-width: 60px;
+            padding: 15px;
+            background: #34495e;
+            border: 2px solid #3498db;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .player-count-btn.selected {
+            background: #3498db;
+            border-color: #2980b9;
+        }
+        .start-game-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 20px;
+            margin-top: 20px;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .legend-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid #fff;
+        }
+        #diceRoll {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            border: 3px solid #f39c12;
+            display: none;
+            z-index: 900;
+            text-align: center;
+        }
+        .dice-display {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .dice {
+            width: 60px;
+            height: 60px;
+            background: white;
+            color: black;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        #territoryInfo {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #3498db;
+            display: none;
+            pointer-events: none;
+            z-index: 800;
+            min-width: 200px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px;
+            border-radius: 20px;
+            border: 4px solid #f39c12;
+            display: none;
+            z-index: 1000;
+            text-align: center;
+        }
+        #gameOver h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #f39c12;
+        }
+        .stats {
+            margin: 20px 0;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="top-bar">
+            <div class="player-info">
+                <div class="current-player" id="currentPlayer">Player 1</div>
+                <div class="phase-indicator" id="phaseIndicator">Phase: Income</div>
+            </div>
+            <div class="player-info">
+                <div class="resource">
+                    <span class="resource-icon" style="background: #3498db;">💰</span>
+                    <span id="money">0</span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon" style="background: #95a5a6;">⚙️</span>
+                    <span id="production">0</span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon" style="background: #2ecc71;">👥</span>
+                    <span id="population">0</span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon" style="background: #f39c12;">📜</span>
+                    <span id="policy">0</span>
+                </div>
+                <div class="resource">
+                    <span style="color: #e74c3c;">🏆</span>
+                    <span id="territories">0</span>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-success" id="nextPhaseBtn" onclick="nextPhase()">Next Phase</button>
+                <button class="btn btn-primary" id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="setupScreen">
+            <div class="setup-panel">
+                <h1>🎲 BRYSK</h1>
+                <p style="text-align: center; color: #95a5a6; margin-bottom: 20px;">
+                    Economic Strategy - Control the Districts
+                </p>
+                <h2>Number of Players</h2>
+                <div class="player-select">
+                    <button class="player-count-btn selected" onclick="selectPlayers(2)">2</button>
+                    <button class="player-count-btn" onclick="selectPlayers(3)">3</button>
+                    <button class="player-count-btn" onclick="selectPlayers(4)">4</button>
+                    <button class="player-count-btn" onclick="selectPlayers(5)">5</button>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #3498db;"></div>
+                        <span>💰 Commercial</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #95a5a6;"></div>
+                        <span>⚙️ Industrial</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2ecc71;"></div>
+                        <span>👥 Residential</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f39c12;"></div>
+                        <span>📜 Governmental</span>
+                    </div>
+                </div>
+                <button class="btn btn-success start-game-btn" onclick="startGame()">START GAME</button>
+            </div>
+        </div>
+
+        <div id="diceRoll">
+            <h2 id="diceTitle">Rolling...</h2>
+            <div class="dice-display">
+                <div class="dice" id="attackerDice">?</div>
+                <div style="font-size: 24px; align-self: center;">VS</div>
+                <div class="dice" id="defenderDice">?</div>
+            </div>
+            <p id="diceResult"></p>
+            <button class="btn btn-primary" onclick="closeDiceRoll()" style="margin-top: 20px;">Continue</button>
+        </div>
+
+        <div id="territoryInfo"></div>
+
+        <div id="gameOver">
+            <h1 id="winnerText">VICTORY!</h1>
+            <div class="stats" id="gameStats"></div>
+            <button class="btn btn-success" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game configuration
+        const config = {
+            playerCount: 2,
+            territoryCount: 36,
+            hexRadius: 35,
+            colors: {
+                commercial: '#3498db',
+                industrial: '#95a5a6',
+                residential: '#2ecc71',
+                governmental: '#f39c12',
+                neutral: '#34495e'
+            },
+            playerColors: ['#e74c3c', '#9b59b6', '#f39c12', '#1abc9c', '#e67e22']
+        };
+
+        // Game state
+        const game = {
+            phase: 0, // 0: income, 1: expand, 2: fortify
+            currentPlayer: 0,
+            turn: 1,
+            selectedTerritory: null,
+            territories: [],
+            players: [],
+            running: false
+        };
+
+        // District types
+        const TYPES = {
+            COMMERCIAL: 0,
+            INDUSTRIAL: 1,
+            RESIDENTIAL: 2,
+            GOVERNMENTAL: 3
+        };
+
+        // Canvas setup
+        function resizeCanvas() {
+            const topBar = document.querySelector('.top-bar');
+            const topBarHeight = topBar.offsetHeight;
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight - topBarHeight;
+            if (game.running) drawGame();
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Player setup
+        function selectPlayers(count) {
+            config.playerCount = count;
+            document.querySelectorAll('.player-count-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+        }
+
+        // Initialize game
+        function startGame() {
+            document.getElementById('setupScreen').style.display = 'none';
+
+            // Create players
+            game.players = [];
+            for (let i = 0; i < config.playerCount; i++) {
+                game.players.push({
+                    id: i,
+                    name: i === 0 ? 'You' : `AI ${i}`,
+                    color: config.playerColors[i],
+                    money: 10,
+                    production: 5,
+                    population: 10,
+                    policy: 2,
+                    isAI: i > 0,
+                    aiType: ['aggressive', 'defensive', 'economic', 'political'][i % 4]
+                });
+            }
+
+            // Generate hex grid
+            generateHexGrid();
+
+            // Assign territories to players
+            distributeInitialTerritories();
+
+            game.running = true;
+            game.phase = 0;
+            game.currentPlayer = 0;
+
+            updateUI();
+            drawGame();
+        }
+
+        // Generate hexagonal grid
+        function generateHexGrid() {
+            const territories = [];
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = config.hexRadius;
+            const spacing = radius * 1.8;
+
+            let id = 0;
+            // Create hex grid in circular pattern
+            for (let ring = 0; ring <= 3; ring++) {
+                if (ring === 0) {
+                    // Center hex
+                    territories.push(createTerritory(id++, centerX, centerY));
+                } else {
+                    // Hexes in ring
+                    const hexesInRing = ring * 6;
+                    for (let i = 0; i < hexesInRing; i++) {
+                        const angle = (Math.PI / 3) * (i / ring);
+                        const x = centerX + Math.cos(angle) * spacing * ring;
+                        const y = centerY + Math.sin(angle) * spacing * ring;
+                        territories.push(createTerritory(id++, x, y));
+                    }
+                }
+            }
+
+            game.territories = territories.slice(0, config.territoryCount);
+            calculateNeighbors();
+        }
+
+        function createTerritory(id, x, y) {
+            const types = [TYPES.COMMERCIAL, TYPES.INDUSTRIAL, TYPES.RESIDENTIAL, TYPES.GOVERNMENTAL];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            return {
+                id,
+                x,
+                y,
+                type,
+                owner: null,
+                strength: 1,
+                neighbors: []
+            };
+        }
+
+        function calculateNeighbors() {
+            const maxDistance = config.hexRadius * 2.2;
+
+            game.territories.forEach(t1 => {
+                t1.neighbors = [];
+                game.territories.forEach(t2 => {
+                    if (t1.id !== t2.id) {
+                        const dist = Math.sqrt(Math.pow(t1.x - t2.x, 2) + Math.pow(t1.y - t2.y, 2));
+                        if (dist < maxDistance) {
+                            t1.neighbors.push(t2.id);
+                        }
+                    }
+                });
+            });
+        }
+
+        function distributeInitialTerritories() {
+            // Shuffle territories
+            const shuffled = [...game.territories].sort(() => Math.random() - 0.5);
+
+            // Distribute evenly
+            shuffled.forEach((territory, index) => {
+                territory.owner = index % config.playerCount;
+                territory.strength = Math.floor(Math.random() * 3) + 2;
+            });
+        }
+
+        // Draw game
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw connections
+            game.territories.forEach(territory => {
+                territory.neighbors.forEach(neighborId => {
+                    const neighbor = game.territories[neighborId];
+                    ctx.beginPath();
+                    ctx.moveTo(territory.x, territory.y);
+                    ctx.lineTo(neighbor.x, neighbor.y);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+            });
+
+            // Draw territories
+            game.territories.forEach(territory => {
+                drawHexagon(territory);
+            });
+        }
+
+        function drawHexagon(territory) {
+            const radius = config.hexRadius;
+            const x = territory.x;
+            const y = territory.y;
+
+            // Determine color
+            let baseColor;
+            switch (territory.type) {
+                case TYPES.COMMERCIAL: baseColor = config.colors.commercial; break;
+                case TYPES.INDUSTRIAL: baseColor = config.colors.industrial; break;
+                case TYPES.RESIDENTIAL: baseColor = config.colors.residential; break;
+                case TYPES.GOVERNMENTAL: baseColor = config.colors.governmental; break;
+            }
+
+            // Draw hexagon
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i;
+                const hx = x + radius * Math.cos(angle);
+                const hy = y + radius * Math.sin(angle);
+                if (i === 0) ctx.moveTo(hx, hy);
+                else ctx.lineTo(hx, hy);
+            }
+            ctx.closePath();
+
+            // Fill with base color
+            ctx.fillStyle = baseColor;
+            ctx.globalAlpha = 0.4;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Owner border
+            if (territory.owner !== null) {
+                ctx.strokeStyle = game.players[territory.owner].color;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Selected highlight
+            if (game.selectedTerritory === territory.id) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+
+            // Draw strength
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(territory.strength, x, y);
+
+            // Draw type icon
+            const icons = ['💰', '⚙️', '👥', '📜'];
+            ctx.font = '16px Arial';
+            ctx.fillText(icons[territory.type], x, y - 15);
+        }
+
+        // UI updates
+        function updateUI() {
+            const player = game.players[game.currentPlayer];
+            document.getElementById('currentPlayer').textContent = player.name;
+            document.getElementById('currentPlayer').style.background = player.color + '40';
+
+            const phases = ['Income', 'Expand', 'Fortify'];
+            document.getElementById('phaseIndicator').textContent = `Phase: ${phases[game.phase]}`;
+
+            document.getElementById('money').textContent = player.money;
+            document.getElementById('production').textContent = player.production;
+            document.getElementById('population').textContent = player.population;
+            document.getElementById('policy').textContent = player.policy;
+
+            const territoryCount = game.territories.filter(t => t.owner === game.currentPlayer).length;
+            document.getElementById('territories').textContent = territoryCount;
+
+            document.getElementById('endTurnBtn').disabled = game.phase !== 2;
+        }
+
+        // Phase management
+        function nextPhase() {
+            if (game.phase === 0) {
+                // Income phase
+                collectIncome();
+                game.phase = 1;
+            } else if (game.phase === 1) {
+                // Expand phase
+                game.phase = 2;
+                game.selectedTerritory = null;
+            }
+            updateUI();
+            drawGame();
+        }
+
+        function endTurn() {
+            game.selectedTerritory = null;
+            game.currentPlayer = (game.currentPlayer + 1) % config.playerCount;
+            game.phase = 0;
+
+            updateUI();
+            drawGame();
+
+            // Check win condition
+            checkWinCondition();
+
+            // AI turn
+            if (game.players[game.currentPlayer].isAI) {
+                setTimeout(doAITurn, 1000);
+            }
+        }
+
+        function collectIncome() {
+            const player = game.players[game.currentPlayer];
+            const ownedTerritories = game.territories.filter(t => t.owner === game.currentPlayer);
+
+            ownedTerritories.forEach(territory => {
+                switch (territory.type) {
+                    case TYPES.COMMERCIAL:
+                        player.money += 3;
+                        break;
+                    case TYPES.INDUSTRIAL:
+                        player.production += 2;
+                        break;
+                    case TYPES.RESIDENTIAL:
+                        player.population += 2;
+                        break;
+                    case TYPES.GOVERNMENTAL:
+                        player.policy += 1;
+                        break;
+                }
+            });
+        }
+
+        // Click handling
+        canvas.addEventListener('click', handleClick);
+
+        function handleClick(e) {
+            if (!game.running || game.players[game.currentPlayer].isAI) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const clicked = game.territories.find(t => {
+                const dist = Math.sqrt(Math.pow(t.x - x, 2) + Math.pow(t.y - y, 2));
+                return dist < config.hexRadius;
+            });
+
+            if (!clicked) return;
+
+            if (game.phase === 1) { // Expand phase
+                if (game.selectedTerritory === null) {
+                    // Select territory
+                    if (clicked.owner === game.currentPlayer) {
+                        game.selectedTerritory = clicked.id;
+                    }
+                } else {
+                    // Attack or deselect
+                    const selected = game.territories[game.selectedTerritory];
+
+                    if (clicked.id === game.selectedTerritory) {
+                        game.selectedTerritory = null;
+                    } else if (selected.neighbors.includes(clicked.id) && clicked.owner !== game.currentPlayer) {
+                        // Attack!
+                        attack(selected, clicked);
+                    }
+                }
+            }
+
+            drawGame();
+        }
+
+        // Combat
+        function attack(attacker, defender) {
+            const attackRoll = Math.floor(Math.random() * 6) + 1 + Math.floor(attacker.strength / 2);
+            const defendRoll = Math.floor(Math.random() * 6) + 1 + Math.floor(defender.strength / 2);
+
+            showDiceRoll(attackRoll, defendRoll, attacker, defender);
+        }
+
+        function showDiceRoll(attackRoll, defendRoll, attacker, defender) {
+            const diceDiv = document.getElementById('diceRoll');
+            document.getElementById('attackerDice').textContent = attackRoll;
+            document.getElementById('defenderDice').textContent = defendRoll;
+
+            let result = '';
+            if (attackRoll > defendRoll) {
+                result = 'VICTORY! Territory conquered!';
+                defender.owner = attacker.owner;
+                defender.strength = Math.max(1, attacker.strength - 1);
+                attacker.strength = 1;
+            } else {
+                result = 'DEFEAT! Attack failed.';
+                attacker.strength = Math.max(1, attacker.strength - 1);
+            }
+
+            document.getElementById('diceResult').textContent = result;
+            diceDiv.style.display = 'block';
+
+            game.selectedTerritory = null;
+        }
+
+        function closeDiceRoll() {
+            document.getElementById('diceRoll').style.display = 'none';
+            drawGame();
+            updateUI();
+            checkWinCondition();
+        }
+
+        // AI
+        function doAITurn() {
+            const player = game.players[game.currentPlayer];
+
+            // Phase 0: Income
+            collectIncome();
+
+            setTimeout(() => {
+                // Phase 1: Expand
+                const myTerritories = game.territories.filter(t => t.owner === game.currentPlayer);
+                const validAttacks = [];
+
+                myTerritories.forEach(territory => {
+                    territory.neighbors.forEach(neighborId => {
+                        const neighbor = game.territories[neighborId];
+                        if (neighbor.owner !== game.currentPlayer) {
+                            validAttacks.push({ from: territory, to: neighbor });
+                        }
+                    });
+                });
+
+                if (validAttacks.length > 0) {
+                    const attack = validAttacks[Math.floor(Math.random() * validAttacks.length)];
+                    const attackRoll = Math.floor(Math.random() * 6) + 1 + Math.floor(attack.from.strength / 2);
+                    const defendRoll = Math.floor(Math.random() * 6) + 1 + Math.floor(attack.to.strength / 2);
+
+                    if (attackRoll > defendRoll) {
+                        attack.to.owner = attack.from.owner;
+                        attack.to.strength = Math.max(1, attack.from.strength - 1);
+                        attack.from.strength = 1;
+                    } else {
+                        attack.from.strength = Math.max(1, attack.from.strength - 1);
+                    }
+                }
+
+                setTimeout(() => {
+                    drawGame();
+                    updateUI();
+                    endTurn();
+                }, 500);
+            }, 800);
+        }
+
+        // Win condition
+        function checkWinCondition() {
+            const territoryCounts = {};
+            config.playerCount;
+
+            game.territories.forEach(t => {
+                if (t.owner !== null) {
+                    territoryCounts[t.owner] = (territoryCounts[t.owner] || 0) + 1;
+                }
+            });
+
+            const winner = Object.entries(territoryCounts).find(([player, count]) => {
+                return count >= game.territories.length * 0.75;
+            });
+
+            if (winner) {
+                endGame(parseInt(winner[0]));
+            }
+        }
+
+        function endGame(winnerId) {
+            game.running = false;
+            const winner = game.players[winnerId];
+
+            document.getElementById('winnerText').textContent =
+                winnerId === 0 ? 'VICTORY!' : `${winner.name} WINS!`;
+            document.getElementById('winnerText').style.color = winner.color;
+
+            const territoryCount = game.territories.filter(t => t.owner === winnerId).length;
+            document.getElementById('gameStats').innerHTML = `
+                <div>Territories Controlled: ${territoryCount}/${game.territories.length}</div>
+                <div>Turns Played: ${game.turn}</div>
+            `;
+
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // Hover info
+        canvas.addEventListener('mousemove', showTerritoryInfo);
+
+        function showTerritoryInfo(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const hovered = game.territories.find(t => {
+                const dist = Math.sqrt(Math.pow(t.x - x, 2) + Math.pow(t.y - y, 2));
+                return dist < config.hexRadius;
+            });
+
+            const infoDiv = document.getElementById('territoryInfo');
+
+            if (hovered && game.running) {
+                const types = ['Commercial', 'Industrial', 'Residential', 'Governmental'];
+                const owner = hovered.owner !== null ? game.players[hovered.owner].name : 'Neutral';
+
+                infoDiv.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px;">${types[hovered.type]} District</div>
+                    <div class="info-row"><span>Owner:</span><span>${owner}</span></div>
+                    <div class="info-row"><span>Strength:</span><span>${hovered.strength}</span></div>
+                    <div class="info-row"><span>Neighbors:</span><span>${hovered.neighbors.length}</span></div>
+                `;
+
+                infoDiv.style.left = (e.clientX + 15) + 'px';
+                infoDiv.style.top = (e.clientY + 15) + 'px';
+                infoDiv.style.display = 'block';
+            } else {
+                infoDiv.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
