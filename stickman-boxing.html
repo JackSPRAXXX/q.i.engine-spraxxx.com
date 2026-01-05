@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Stickman Boxing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            touch-action: none;
+        }
+        #gameCanvas {
+            display: block;
+            background: #2c3e50;
+            margin: 0 auto;
+            border: 3px solid #fff;
+        }
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .controls-overlay {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 200px;
+            pointer-events: none;
+        }
+        .control-btn {
+            position: absolute;
+            pointer-events: auto;
+            border-radius: 50%;
+            opacity: 0.3;
+            transition: opacity 0.1s;
+            user-select: none;
+            touch-action: none;
+        }
+        .control-btn.active {
+            opacity: 0.6;
+        }
+        .left-punch {
+            bottom: 30px;
+            left: 30px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, #e74c3c, #c0392b);
+            border: 4px solid #fff;
+        }
+        .right-punch {
+            bottom: 30px;
+            right: 30px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, #e67e22, #d35400);
+            border: 4px solid #fff;
+        }
+        .dodge {
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, #3498db, #2980b9);
+            border: 4px solid #fff;
+        }
+        .dodge-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+        }
+        #gameOver h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #gameOver button {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #gameOver button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="controls-overlay">
+            <div class="control-btn left-punch" id="leftPunch"></div>
+            <div class="control-btn right-punch" id="rightPunch"></div>
+            <div class="control-btn dodge" id="dodge">
+                <div class="dodge-indicator">↕<br>DODGE</div>
+            </div>
+        </div>
+        <div id="gameOver">
+            <h1 id="resultText">YOU WIN!</h1>
+            <p id="resultSubtext">Knockout!</p>
+            <button id="restartBtn">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = Math.min(window.innerWidth - 20, 800);
+            canvas.height = Math.min(window.innerHeight - 20, 600);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game state
+        const game = {
+            running: true,
+            frame: 0
+        };
+
+        // Player (left side)
+        const player = {
+            x: 150,
+            y: 300,
+            baseY: 300,
+            health: 100,
+            maxHealth: 100,
+            leftPunch: false,
+            rightPunch: false,
+            dodging: 0, // -1 down, 0 normal, 1 up
+            punchCooldown: 0,
+            leftPunchExtend: 0,
+            rightPunchExtend: 0,
+            hitStun: 0
+        };
+
+        // Opponent (right side)
+        const opponent = {
+            x: canvas.width - 150,
+            y: 300,
+            baseY: 300,
+            health: 100,
+            maxHealth: 100,
+            leftPunch: false,
+            rightPunch: false,
+            dodging: 0,
+            punchCooldown: 0,
+            leftPunchExtend: 0,
+            rightPunchExtend: 0,
+            hitStun: 0,
+            aiTimer: 0,
+            aiState: 'idle'
+        };
+
+        // Touch controls
+        const controls = {
+            leftPunch: false,
+            rightPunch: false,
+            dodgeUp: false,
+            dodgeDown: false
+        };
+
+        // Handle touch/mouse events
+        function setupControls() {
+            const leftPunchBtn = document.getElementById('leftPunch');
+            const rightPunchBtn = document.getElementById('rightPunch');
+            const dodgeBtn = document.getElementById('dodge');
+
+            function handleLeftPunch(active) {
+                controls.leftPunch = active;
+                leftPunchBtn.classList.toggle('active', active);
+            }
+
+            function handleRightPunch(active) {
+                controls.rightPunch = active;
+                rightPunchBtn.classList.toggle('active', active);
+            }
+
+            function handleDodge(e, active) {
+                if (!active) {
+                    controls.dodgeUp = false;
+                    controls.dodgeDown = false;
+                    dodgeBtn.classList.remove('active');
+                    return;
+                }
+
+                const rect = dodgeBtn.getBoundingClientRect();
+                const centerY = rect.top + rect.height / 2;
+                const touchY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                if (touchY < centerY) {
+                    controls.dodgeUp = true;
+                    controls.dodgeDown = false;
+                } else {
+                    controls.dodgeUp = false;
+                    controls.dodgeDown = true;
+                }
+                dodgeBtn.classList.add('active');
+            }
+
+            // Left punch
+            leftPunchBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleLeftPunch(true); });
+            leftPunchBtn.addEventListener('touchend', (e) => { e.preventDefault(); handleLeftPunch(false); });
+            leftPunchBtn.addEventListener('mousedown', () => handleLeftPunch(true));
+            leftPunchBtn.addEventListener('mouseup', () => handleLeftPunch(false));
+
+            // Right punch
+            rightPunchBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleRightPunch(true); });
+            rightPunchBtn.addEventListener('touchend', (e) => { e.preventDefault(); handleRightPunch(false); });
+            rightPunchBtn.addEventListener('mousedown', () => handleRightPunch(true));
+            rightPunchBtn.addEventListener('mouseup', () => handleRightPunch(false));
+
+            // Dodge
+            dodgeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleDodge(e, true); });
+            dodgeBtn.addEventListener('touchmove', (e) => { e.preventDefault(); handleDodge(e, true); });
+            dodgeBtn.addEventListener('touchend', (e) => { e.preventDefault(); handleDodge(e, false); });
+            dodgeBtn.addEventListener('mousedown', (e) => handleDodge(e, true));
+            dodgeBtn.addEventListener('mouseup', (e) => handleDodge(e, false));
+        }
+
+        // Draw stickman
+        function drawStickman(x, y, fighter, facingRight = true) {
+            const scale = facingRight ? 1 : -1;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, 1);
+
+            // Apply hit flash
+            if (fighter.hitStun > 0) {
+                ctx.globalAlpha = 0.5 + (fighter.hitStun % 5) * 0.1;
+            }
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(0, -50, 20, 0, Math.PI * 2);
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-8, -55, 5, 5);
+            ctx.fillRect(3, -55, 5, 5);
+
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(0, -30);
+            ctx.lineTo(0, 20);
+            ctx.stroke();
+
+            // Left arm (punching)
+            const leftExtend = fighter.leftPunchExtend;
+            ctx.beginPath();
+            ctx.moveTo(0, -20);
+            ctx.lineTo(-20 - leftExtend, -10);
+            ctx.lineTo(-25 - leftExtend, -5);
+            ctx.stroke();
+
+            // Draw glove
+            ctx.beginPath();
+            ctx.arc(-25 - leftExtend, -5, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+            ctx.stroke();
+
+            // Right arm (punching)
+            const rightExtend = fighter.rightPunchExtend;
+            ctx.beginPath();
+            ctx.moveTo(0, -20);
+            ctx.lineTo(20 + rightExtend, -10);
+            ctx.lineTo(25 + rightExtend, -5);
+            ctx.stroke();
+
+            // Draw glove
+            ctx.beginPath();
+            ctx.arc(25 + rightExtend, -5, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#e67e22';
+            ctx.fill();
+            ctx.stroke();
+
+            // Legs
+            ctx.beginPath();
+            ctx.moveTo(0, 20);
+            ctx.lineTo(-15, 60);
+            ctx.moveTo(0, 20);
+            ctx.lineTo(15, 60);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Draw health bar
+        function drawHealthBar(x, y, health, maxHealth, label) {
+            const barWidth = 150;
+            const barHeight = 20;
+            const healthPercent = health / maxHealth;
+
+            // Background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x, y, barWidth, barHeight);
+
+            // Health
+            const healthColor = healthPercent > 0.5 ? '#2ecc71' : healthPercent > 0.25 ? '#f39c12' : '#e74c3c';
+            ctx.fillStyle = healthColor;
+            ctx.fillRect(x, y, barWidth * healthPercent, barHeight);
+
+            // Border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, barWidth, barHeight);
+
+            // Label
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(label, x, y - 5);
+            ctx.fillText(Math.max(0, Math.round(health)), x + barWidth - 30, y + 15);
+        }
+
+        // Update player
+        function updatePlayer() {
+            if (player.hitStun > 0) {
+                player.hitStun--;
+                return;
+            }
+
+            // Dodging
+            if (controls.dodgeUp && player.dodging !== 1) {
+                player.dodging = 1;
+                player.y = player.baseY - 40;
+            } else if (controls.dodgeDown && player.dodging !== -1) {
+                player.dodging = -1;
+                player.y = player.baseY + 40;
+            } else if (!controls.dodgeUp && !controls.dodgeDown) {
+                player.dodging = 0;
+                player.y = player.baseY;
+            }
+
+            // Punching
+            if (player.punchCooldown > 0) {
+                player.punchCooldown--;
+            }
+
+            // Left punch
+            if (controls.leftPunch && player.punchCooldown === 0) {
+                player.leftPunchExtend = Math.min(player.leftPunchExtend + 15, 60);
+                if (player.leftPunchExtend === 60) {
+                    checkPlayerHit('left');
+                    player.punchCooldown = 20;
+                }
+            } else {
+                player.leftPunchExtend = Math.max(player.leftPunchExtend - 10, 0);
+            }
+
+            // Right punch
+            if (controls.rightPunch && player.punchCooldown === 0) {
+                player.rightPunchExtend = Math.min(player.rightPunchExtend + 15, 60);
+                if (player.rightPunchExtend === 60) {
+                    checkPlayerHit('right');
+                    player.punchCooldown = 20;
+                }
+            } else {
+                player.rightPunchExtend = Math.max(player.rightPunchExtend - 10, 0);
+            }
+        }
+
+        // AI opponent
+        function updateOpponent() {
+            if (opponent.hitStun > 0) {
+                opponent.hitStun--;
+                return;
+            }
+
+            opponent.aiTimer++;
+
+            // Simple AI behavior
+            if (opponent.aiTimer > 60) {
+                opponent.aiTimer = 0;
+                const random = Math.random();
+
+                if (random < 0.3) {
+                    opponent.aiState = 'punch';
+                } else if (random < 0.5) {
+                    opponent.aiState = 'dodge';
+                } else {
+                    opponent.aiState = 'idle';
+                }
+            }
+
+            // Execute AI state
+            if (opponent.aiState === 'dodge') {
+                if (Math.random() < 0.5) {
+                    opponent.dodging = 1;
+                    opponent.y = opponent.baseY - 40;
+                } else {
+                    opponent.dodging = -1;
+                    opponent.y = opponent.baseY + 40;
+                }
+            } else {
+                opponent.dodging = 0;
+                opponent.y = opponent.baseY;
+            }
+
+            // Opponent punching
+            if (opponent.punchCooldown > 0) {
+                opponent.punchCooldown--;
+            }
+
+            if (opponent.aiState === 'punch' && opponent.punchCooldown === 0) {
+                const useFeft = Math.random() < 0.5;
+                if (useFeft) {
+                    opponent.leftPunchExtend = Math.min(opponent.leftPunchExtend + 15, 60);
+                    if (opponent.leftPunchExtend === 60) {
+                        checkOpponentHit('left');
+                        opponent.punchCooldown = 40;
+                    }
+                } else {
+                    opponent.rightPunchExtend = Math.min(opponent.rightPunchExtend + 15, 60);
+                    if (opponent.rightPunchExtend === 60) {
+                        checkOpponentHit('right');
+                        opponent.punchCooldown = 40;
+                    }
+                }
+            } else {
+                opponent.leftPunchExtend = Math.max(opponent.leftPunchExtend - 10, 0);
+                opponent.rightPunchExtend = Math.max(opponent.rightPunchExtend - 10, 0);
+            }
+        }
+
+        // Check if player hits opponent
+        function checkPlayerHit(hand) {
+            const punchX = player.x + (hand === 'left' ? -25 - player.leftPunchExtend : 25 + player.rightPunchExtend);
+            const punchY = player.y - 5;
+
+            const distance = Math.sqrt(Math.pow(punchX - opponent.x, 2) + Math.pow(punchY - opponent.y, 2));
+
+            if (distance < 80 && opponent.dodging === 0) {
+                opponent.health -= 15;
+                opponent.hitStun = 10;
+
+                if (opponent.health <= 0) {
+                    endGame(true);
+                }
+            }
+        }
+
+        // Check if opponent hits player
+        function checkOpponentHit(hand) {
+            const punchX = opponent.x - (hand === 'left' ? -25 - opponent.leftPunchExtend : 25 + opponent.rightPunchExtend);
+            const punchY = opponent.y - 5;
+
+            const distance = Math.sqrt(Math.pow(punchX - player.x, 2) + Math.pow(punchY - player.y, 2));
+
+            if (distance < 80 && player.dodging === 0) {
+                player.health -= 12;
+                player.hitStun = 10;
+
+                if (player.health <= 0) {
+                    endGame(false);
+                }
+            }
+        }
+
+        // End game
+        function endGame(playerWon) {
+            game.running = false;
+            const gameOverDiv = document.getElementById('gameOver');
+            const resultText = document.getElementById('resultText');
+            const resultSubtext = document.getElementById('resultSubtext');
+
+            if (playerWon) {
+                resultText.textContent = 'YOU WIN!';
+                resultText.style.color = '#2ecc71';
+                resultSubtext.textContent = 'Knockout! The opponent is down!';
+            } else {
+                resultText.textContent = 'YOU LOSE!';
+                resultText.style.color = '#e74c3c';
+                resultSubtext.textContent = 'You got knocked out!';
+            }
+
+            gameOverDiv.style.display = 'block';
+        }
+
+        // Restart game
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            player.health = 100;
+            opponent.health = 100;
+            player.hitStun = 0;
+            opponent.hitStun = 0;
+            player.leftPunchExtend = 0;
+            player.rightPunchExtend = 0;
+            opponent.leftPunchExtend = 0;
+            opponent.rightPunchExtend = 0;
+            player.y = player.baseY;
+            opponent.y = opponent.baseY;
+            game.running = true;
+            document.getElementById('gameOver').style.display = 'none';
+        });
+
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw boxing ring
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(20, canvas.height - 250, canvas.width - 40, 230);
+
+            // Draw center line
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, canvas.height - 250);
+            ctx.lineTo(canvas.width / 2, canvas.height - 20);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw fighters
+            drawStickman(player.x, player.y, player, true);
+            drawStickman(opponent.x, opponent.y, opponent, false);
+
+            // Draw health bars
+            drawHealthBar(30, 30, player.health, player.maxHealth, 'PLAYER');
+            drawHealthBar(canvas.width - 180, 30, opponent.health, opponent.maxHealth, 'OPPONENT');
+
+            // Draw round timer
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('FIGHT!', canvas.width / 2, 40);
+            ctx.textAlign = 'left';
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (game.running) {
+                updatePlayer();
+                updateOpponent();
+            }
+
+            draw();
+            game.frame++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        setupControls();
+        gameLoop();
+    </script>
+</body>
+</html>
